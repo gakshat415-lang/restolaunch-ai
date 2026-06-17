@@ -1,0 +1,78 @@
+# Technical & Product Problem Brief: RestoLaunch AI
+
+## 1. Product Problem Brief
+
+### The Context
+Launching a physical restaurant or cloud kitchen requires massive upfront capital expenditure (CapEx) on real estate, kitchen infrastructure, and staffing. In hyper-competitive food capitals like Bangalore, market dynamics shift block-by-block, not just city-by-city.
+
+### The Core Problem Statement
+Independent culinary entrepreneurs lack access to hyper-local, consolidated market intelligence, forcing them to make high-stakes capital allocation decisions based on intuition, anecdotal advice, or fragmented data.
+
+### The Root Causes
+* **Information Asymmetry:** Platforms like Zomato hold the ground truth on consumer preferences (ratings, volumes, cuisines), but this data is optimized for consumers looking for a meal, not founders looking to open a business.
+* **The "Micro-Market" Trap:** A cuisine format that is highly profitable in Indiranagar might completely bomb two kilometers away in Koramangala due to localized supply saturation or lower household spending thresholds.
+* **Blind Spot Pricing:** Founders often price their menus based on their internal cost of goods sold (COGS) rather than the local neighborhood's optimal price-elasticity sweet spot.
+
+### The Business Impact
+This empirical blind spot is the direct driver behind the industry's starkest metric: 60% of new restaurant concepts fail within their first 12 months. This represents millions in lost capital, stranded inventory, and operational churn.
+
+---
+
+## 2. Technical System Architecture
+
+### User Input (The Request)
+The system captures specific data points directly from the user (the aspiring restaurant owner) to define what kind of business they want to open. The system captures these exact four variables:
+* **Target Location:** The specific neighborhood they want to open in (e.g., "Indiranagar").
+* **Operational Format:** The type of restaurant (e.g., "Cafe" or "Quick Bites").
+* **Proposed Budget:** The average cost for two people (e.g., 600 INR).
+* **Target Cuisine:** The type of food they want to sell (e.g., "Italian" or "North Indian").
+
+### Data Ingestion (Cleaning the Raw Data)
+The system loads a static database of over 51,000 restaurants. Before doing any math, the system must clean the messy text data into strict numbers so the math operates seamlessly:
+* **Fixing Prices:** Remove commas from string numbers (convert "1,200" to integer 1200).
+* **Fixing Ratings:** Extract the first number from text like "4.1/5" to get the float 4.1. If a restaurant is marked as "NEW" or "-", assign it a safe average fallback number (like 3.5) so the execution sequence does not crash.
+* **Fixing Votes:** Convert vote counts into simple integers. If there are no votes, set the parameter to 0.
+
+### Integration Layer (Filtering the Noise)
+Before running heavy calculations, the system shrinks the dataset to optimize processing footprints:
+* **The Location & Format Filter:** The system looks at the global 51,000+ records and filters out entries that do not match the user's Target Location and Operational Format constraints.
+* **The Budget Bracket Filter:** To ensure apples-to-apples comparisons, the system further filters competitors to only include those within a +/- 30% range of the user's Proposed Budget. This prevents affordable street-food from being evaluated against luxury fine-dining.
+* **The Result:** This leaves a clean, hyper-local list of about 200 to 400 direct competitors that share similar pricing dynamics. All subsequent mathematical equations run only on this isolated, highly-relevant subset.
+
+### Recommendation Engine (The Scoring Engine)
+The goal of the scoring engine is to find "Market Vacuums"—cuisines that local consumers love and interact with frequently, but lack enough physical density to satisfy demand. The system processes the data using a strict four-step loop:
+
+#### Step A: Calculate the Market Demand Score (MDS) for Every Restaurant
+Raw customer ratings fail to show true market validation. A restaurant with a 5.0 rating from only 2 reviews cannot be favored over an infrastructure block with a 4.2 rating from 2,000 reviews. The engine blends individual quality ratings with review volumes to extract true popularity.
+
+$$\text{MDS} = (\text{Cleaned Rating})^2 \times \log_{10}(\text{Votes} + 1)$$
+
+* **Why we square the Rating:** This exponentially rewards high-quality establishments, ensuring that poorly-rated restaurants with massive historical footfall don't artificially inflate the demand score.
+* **Why we use Logarithm (log10):** A logarithm smooths out massive volume scale spikes. This ensures a dominant player with 10,000 votes doesn't completely break the comparative scale against an emerging player with 1,000 votes.
+* **Why we add +1:** If an establishment has 0 votes, calculating $\log_{10}(0)$ throws a terminal math error. Adding +1 ensures that an entry with zero votes safely equals an operational score of zero.
+
+#### Step B: Calculate the Average Demand for the Target Cuisine
+The system groups all local restaurants inside the active subset by their target cuisine parameter (e.g., all Italian restaurants inside Indiranagar). It aggregates the individual MDS properties of every matching restaurant to discover the local category demand baseline.
+
+$$\overline{\text{MDS}}_{\text{cuisine}} = \frac{\sum \text{MDS of all local restaurants serving that Cuisine (excluding 0-vote entries)}}{\text{Total number of restaurants serving that Cuisine (excluding 0-vote entries)}}$$
+
+* **The Zero-Vote Exclusion:** Restaurants with 0 votes (brand new establishments) are entirely excluded from the Average MDS calculation. Including them as a `0` would artificially drag the neighborhood's demand average down to the floor.
+* **Fallback Mechanism:** If the Total number of competitors with valid data is 0, the system defaults to using the city-wide average MDS for that cuisine to prevent a fatal division-by-zero error and provide a baseline for Step D.
+
+This resulting float value indicates exactly how deeply validated a culinary segment is within the target boundary.
+
+#### Step C: Count the Competitors (Supply Saturation)
+The system calculates the total number of physical competitor units currently serving that specific cuisine inside the active neighborhood boundary. This integer value is declared as the Competitor Count ($C$). **Note:** Unlike Step B, brand new restaurants (0 votes) ARE included in this count, because they physically take up market supply space regardless of their unproven demand.
+
+#### Step D: Calculate the Final Opportunity Index (OI)
+The final scoring index isolates the arbitrage gap by identifying areas featuring high consumer validation (high Average MDS) juxtaposed against low market access points (low Competitor Count).
+
+$$\text{Opportunity Index} = \frac{\overline{\text{MDS}}_{\text{cuisine}}}{\sqrt{C + 1}}$$
+
+* **Why we use the Square Root of Supply:** Scaling the denominator linearly drops the Opportunity Index too aggressively for every single competitor added. Taking the square root softens this penalty so markets with 1 or 2 competitors aren't completely ignored if demand is astronomically high.
+* **Why we add +1 to the denominator:** If there are zero existing restaurants matching the cuisine query in the neighborhood ($C = 0$), dividing by $\sqrt{1}$ preserves the baseline demand value perfectly, maintaining a massive index value to flag an unsaturated market vacuum.
+
+### Output Display (Frontend Presentation)
+The system translates the backend calculation arrays into a simplified, clear layout designed to eliminate strategic choice overload for the user:
+* **The Verdict:** A clean context alert labeling the user's current concept as either a "High Opportunity Market Gap" or an "Oversaturated Red Ocean."
+* **Top 5 Competitors:** A minimal tabular layout sorting the top 5 direct competitor models in the immediate geographic area, ranked highest to lowest by their singular MDS metric.

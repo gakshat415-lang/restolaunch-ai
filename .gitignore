@@ -1,0 +1,15 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+.env*
+.pytest_cache/
+
+# Data Files (GitHub blocks >100MB files)
+dataset.csv
+
+# Node
+node_modules/
+dist/
+.DS_Store
