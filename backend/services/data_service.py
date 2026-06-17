@@ -56,11 +56,7 @@ def load_data(filepath: str = "dataset.csv"):
             return
 
     try:
-        raw_df = pd.read_csv(filepath)
-        
         # Check if the CSV has the expected zomato columns and rename/map them if necessary
-        # The zomato dataset typically has columns like: name, location, rest_type, approx_cost(for two people), cuisines, rate, votes
-        # We need to standardize them to our expected columns: Name, Location, Format, Price, Cuisine, Rating, Votes
         rename_map = {
             'name': 'Name',
             'location': 'Location',
@@ -70,6 +66,12 @@ def load_data(filepath: str = "dataset.csv"):
             'rate': 'Rating',
             'votes': 'Votes'
         }
+        
+        # Optimize memory by ONLY loading the columns we need.
+        # This prevents the 500MB OOM crash on Render free tier.
+        columns_to_load = list(rename_map.keys())
+        raw_df = pd.read_csv(filepath, usecols=columns_to_load)
+        
         raw_df.rename(columns=rename_map, inplace=True)
         
         global_df = clean_data(raw_df)
